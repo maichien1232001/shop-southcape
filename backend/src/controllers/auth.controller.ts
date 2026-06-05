@@ -2,12 +2,18 @@ import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { User, IUser } from '../models/User';
+import { BlacklistedToken } from '../models/BlacklistedToken';
 import moment from 'moment';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'southcapesecrethashkey2026';
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'southcaperefreshsecrethashkey2026';
 
 const hashPassword = (password: string): string => {
   return crypto.createHash('sha256').update(password).digest('hex');
+};
+
+const hashRefreshToken = (token: string): string => {
+  return crypto.createHash('sha256').update(token).digest('hex');
 };
 
 export const register = async (req: Request, res: Response): Promise<void> => {
@@ -66,16 +72,35 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Tạo token JWT
+    // Tạo Access Token (hạn ngắn: 15 phút)
     const token = jwt.sign(
       { id: user._id, email: user.email, role: user.role },
       JWT_SECRET,
+      { expiresIn: '15m' }
+    );
+
+    // Tạo Refresh Token (hạn dài: 7 ngày)
+    const refreshToken = jwt.sign(
+      { id: user._id },
+      JWT_REFRESH_SECRET,
       { expiresIn: '7d' }
     );
 
+    // Lưu hash của refresh token vào DB
+    user.refreshToken = hashRefreshToken(refreshToken);
+    await user.save();
+
+    // Set cookie refresh token (HttpOnly, Secure)
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 ngày
+    });
+
     res.status(200).json({
       message: 'Đăng nhập thành công.',
-      token,
+      token, // Access Token
       user: {
         id: user._id,
         email: user.email,
@@ -86,6 +111,95 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);
     res.status(500).json({ message: 'Lỗi đăng nhập.', error: msg });
+  }
+};
+
+export const refresh = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const refreshToken = req.cookies?.refreshToken;
+    if (!refreshToken) {
+      res.status(401).json({ message: 'Không tìm thấy Refresh Token.' });
+      return;
+    }
+
+    let decoded: any;
+    try {
+      decoded = jwt.verify(refreshToken, JWT_REFRESH_SECRET);
+    } catch (err) {
+      res.status(401).json({ message: 'Refresh Token không hợp lệ hoặc đã hết hạn.' });
+      return;
+    }
+
+    const user = await User.findById(decoded.id);
+    if (!user || !user.refreshToken) {
+      res.status(401).json({ message: 'Người dùng không tồn tại hoặc đã đăng xuất.' });
+      return;
+    }
+
+    // Đối chiếu hash refresh token
+    const hashedToken = hashRefreshToken(refreshToken);
+    if (user.refreshToken !== hashedToken) {
+      res.status(401).json({ message: 'Refresh Token đã bị vô hiệu hóa.' });
+      return;
+    }
+
+    // Tạo Access Token mới (15 phút)
+    const token = jwt.sign(
+      { id: user._id, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '15m' }
+    );
+
+    res.status(200).json({
+      token, // Access Token mới
+      user: {
+        id: user._id,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.role,
+      },
+    });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ message: 'Lỗi refresh token.', error: msg });
+  }
+};
+
+export const logout = async (req: Request, res: Response): Promise<void> => {
+  try {
+    // 1. Blacklist Access Token hiện tại
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      try {
+        const decoded = jwt.decode(token) as any;
+        if (decoded && decoded.exp) {
+          // Tính thời gian hết hạn của Access Token
+          const expireAt = new Date(decoded.exp * 1000);
+          await BlacklistedToken.create({ token, expireAt });
+        }
+      } catch (err) {
+        console.error('Lỗi khi decode token để blacklist:', err);
+      }
+    }
+
+    // 2. Xóa Refresh Token trong Database của người dùng
+    if (req.user) {
+      const user = req.user as IUser;
+      await User.findByIdAndUpdate(user._id, { $unset: { refreshToken: 1 } });
+    }
+
+    // 3. Xóa cookie refreshToken ở client
+    res.clearCookie('refreshToken', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+    });
+
+    res.status(200).json({ message: 'Đăng xuất thành công.' });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ message: 'Lỗi đăng xuất.', error: msg });
   }
 };
 

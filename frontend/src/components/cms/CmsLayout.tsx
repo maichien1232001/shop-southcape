@@ -25,6 +25,7 @@ import {
 import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "../../store";
 import { logout } from "../../features/auth/store/authSlice";
+import { useLogoutMutation } from "../../features/store/services/rtkQueryStoreApi";
 
 const { Header, Sider, Content } = Layout;
 
@@ -34,8 +35,14 @@ export const CmsLayout: React.FC = () => {
   const location = useLocation();
   const dispatch = useDispatch();
   const { user } = useSelector((state: RootState) => state.auth);
+  const [logoutApi] = useLogoutMutation();
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await logoutApi().unwrap();
+    } catch (err) {
+      console.error("Lỗi khi logout:", err);
+    }
     dispatch(logout());
     navigate("/login");
   };

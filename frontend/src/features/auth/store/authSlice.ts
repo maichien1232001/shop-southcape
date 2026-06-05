@@ -1,5 +1,4 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { STORAGE_KEYS } from '../../../constants/storage.constant';
 
 export interface UserInfo {
   id: string;
@@ -12,32 +11,14 @@ interface AuthState {
   user: UserInfo | null;
   token: string | null;
   isAuthenticated: boolean;
+  isInitializing: boolean;
 }
 
-const getSavedToken = (): string | null => {
-  try {
-    return localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
-  } catch {
-    return null;
-  }
-};
-
-const getSavedUser = (): UserInfo | null => {
-  try {
-    const saved = localStorage.getItem('southcape_user');
-    return saved ? JSON.parse(saved) : null;
-  } catch {
-    return null;
-  }
-};
-
-const savedToken = getSavedToken();
-const savedUser = getSavedUser();
-
 const initialState: AuthState = {
-  user: savedUser,
-  token: savedToken,
-  isAuthenticated: !!savedToken,
+  user: null,
+  token: null,
+  isAuthenticated: false,
+  isInitializing: true,
 };
 
 export const authSlice = createSlice({
@@ -52,26 +33,19 @@ export const authSlice = createSlice({
       state.user = user;
       state.token = token;
       state.isAuthenticated = true;
-      try {
-        localStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
-        localStorage.setItem('southcape_user', JSON.stringify(user));
-      } catch (e) {
-        console.error('Lỗi lưu thông tin xác thực:', e);
-      }
+      state.isInitializing = false;
     },
     logout: (state) => {
       state.user = null;
       state.token = null;
       state.isAuthenticated = false;
-      try {
-        localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
-        localStorage.removeItem('southcape_user');
-      } catch (e) {
-        console.error('Lỗi xóa thông tin xác thực:', e);
-      }
+      state.isInitializing = false;
+    },
+    setInitializing: (state, action: PayloadAction<boolean>) => {
+      state.isInitializing = action.payload;
     },
   },
 });
 
-export const { setCredentials, logout } = authSlice.actions;
+export const { setCredentials, logout, setInitializing } = authSlice.actions;
 export default authSlice.reducer;

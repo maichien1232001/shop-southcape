@@ -1,6 +1,6 @@
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import { RootState } from '../../../store';
+import { createApi } from '@reduxjs/toolkit/query/react';
 import { Product } from '../../../interfaces/product.interface';
+import { createBaseQueryWithReauth } from '../../../store/baseQueryWithReauth';
 
 export interface PaginatedResponse<T> {
   data: T[];
@@ -23,16 +23,7 @@ export interface CmsQueryListParams {
 export const rtkQueryCmsApi = createApi({
   reducerPath: 'rtkQueryCmsApi',
   tagTypes: ['CmsProducts', 'CmsOrders', 'CmsCoupons', 'CmsCustomers', 'CmsPayments', 'CmsStats'],
-  baseQuery: fetchBaseQuery({
-    baseUrl: `${(import.meta.env.VITE_API_URL as string) || 'http://localhost:5000/api'}/cms`,
-    prepareHeaders: (headers, { getState }) => {
-      const token = (getState() as RootState).auth?.token;
-      if (token) {
-        headers.set('authorization', `Bearer ${token}`);
-      }
-      return headers;
-    },
-  }),
+  baseQuery: createBaseQueryWithReauth(`${(import.meta.env.VITE_API_URL as string) || 'http://localhost:5000/api'}/cms`),
   endpoints: (builder) => ({
     // ===== Sản phẩm =====
     getCmsProducts: builder.query<PaginatedResponse<Product>, CmsQueryListParams | void>({

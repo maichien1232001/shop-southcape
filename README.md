@@ -91,6 +91,26 @@ shop/
 
 ---
 
+## 🔒 Bảo Mật & Xác Thực (Security & Authentication)
+
+Dự án áp dụng cơ chế xác thực nâng cao và bảo mật tuyệt đối chống lại các tấn công phổ biến như XSS và CSRF bằng mô hình **Chiến lược lưu trữ kép (Dual-Storage Strategy)**:
+
+1. **Access Token (Hạn ngắn - 15 phút)**:
+   - Được trả về qua JSON body của phản hồi Login/Refresh.
+   - Lưu trữ hoàn toàn trên **RAM (Redux State)** của Frontend. Trình duyệt không lưu Access Token xuống Disk, giúp phòng chống tối đa tấn công XSS chiếm dụng token.
+   - Cho phép JavaScript ở Frontend truy cập token này để đính kèm header `Authorization` khi gọi các API bên thứ 3 từ Client-side.
+2. **Refresh Token (Hạn dài - 7 ngày)**:
+   - Được Backend thiết lập dưới dạng **Secure HttpOnly Cookie**. Trình duyệt tự động quản lý ở tầng hệ thống và chặn mọi kịch bản JavaScript tiếp cận, ngăn ngừa đánh cắp token dài hạn.
+   - Khi reload trang hoặc Access Token hết hạn, Frontend tự động bắn request `/auth/refresh` (trình duyệt tự đính kèm cookie) để nhận Access Token mới lưu lại vào Redux RAM.
+3. **Cơ chế Request Pooling (Mutex Lock)**:
+   - Khi token hết hạn (lỗi 401), custom BaseQuery của RTK Query sử dụng kỹ thuật Shared Promise để khóa tiến trình. Kể cả khi có hàng chục request đồng thời bị lỗi 401, hệ thống **chỉ gửi duy nhất 1 yêu cầu làm mới `/auth/refresh`** lên backend, gom các request còn lại vào hàng đợi và tự động bắn lại (retry) khi lấy được token mới thành công.
+4. **Cơ chế Blacklist Token khi Logout**:
+   - Khi người dùng đăng xuất (Logout), hệ thống sẽ gửi yêu cầu lên Backend thu hồi token.
+   - Backend xóa bỏ cookie `refreshToken`, xóa token trong DB.
+   - Đồng thời, đưa Access Token cũ đang hoạt động vào bảng `BlacklistedToken` lưu trong MongoDB. Bảng này áp dụng thuộc tính **TTL (Time-To-Live) Index** để tự động xóa bản ghi khi token hết hạn tự nhiên nhằm giữ cơ sở dữ liệu gọn nhẹ.
+
+---
+
 ## 🚀 Hướng Dẫn Cài Đặt và Khởi Chạy (Installation & Usage)
 
 ### Bước 1: Clone dự án và cài đặt dependencies

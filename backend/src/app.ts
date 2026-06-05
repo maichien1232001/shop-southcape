@@ -1,5 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import passport from 'passport';
 import './constants/timezone';
@@ -14,17 +15,25 @@ import productRoutes from './routes/product.routes';
 import categoryRoutes from './routes/category.routes';
 import orderRoutes from './routes/order.routes';
 import cmsRoutes from './routes/cms.routes';
+import { checkBlacklist } from './middlewares/auth.middleware';
 
 dotenv.config();
 
 const app = express();
 
-app.use(cors());
+app.use(cors({
+  origin: true, // Cho phép origin hiện tại gửi request
+  credentials: true, // Cho phép đính kèm cookie
+}));
+app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Khởi tạo Passport Middleware
 app.use(passport.initialize() as unknown as express.Handler);
+
+// Đăng ký middleware kiểm tra Blacklist toàn cục cho mọi request
+app.use(checkBlacklist);
 
 // Route kiểm tra sức khỏe hệ thống (Health Check)
 app.get('/health', (req: Request, res: Response) => {

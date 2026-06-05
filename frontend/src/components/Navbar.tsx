@@ -7,6 +7,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Drawer, Dropdown, notification } from 'antd';
 import { setLocale, setCurrency } from '../features/shop/store/localeSlice';
 import { logout } from '../features/auth/store/authSlice';
+import { useLogoutMutation } from '../features/store/services/rtkQueryStoreApi';
 import { LANGUAGES, CURRENCIES } from '../constants/languages';
 import { RootState } from '../store';
 
@@ -16,6 +17,7 @@ export const Navbar: React.FC = () => {
   const location = useLocation();
   const { itemsCount } = useCart();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [logoutApi] = useLogoutMutation();
 
   // Lấy locale và currency từ Redux
   const { locale, currency } = useSelector((state: RootState) => state.locale);
@@ -37,7 +39,12 @@ export const Navbar: React.FC = () => {
     { label: navLabels.accessories[locale], path: '/search?category=accessories' },
   ];
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await logoutApi().unwrap();
+    } catch (err) {
+      console.error('Lỗi khi gọi logout API:', err);
+    }
     dispatch(logout());
     notification.success({
       message: locale === 'vi' ? 'Đăng xuất' : 'Logout',
