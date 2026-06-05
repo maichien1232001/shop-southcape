@@ -1,0 +1,12 @@
+# Southcape Backend Git Ignore (2026)
+
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+*.log
+.eslintcache
+
+.vercel
+.env*
